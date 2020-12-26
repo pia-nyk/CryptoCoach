@@ -1,63 +1,41 @@
 import pandas as pd
 import numpy as np
-from utils import portfolio
 
 class CryptoEnvironment:
+    def __init__(self, train_prices='../data/crypto_portfolio_train.csv', test_prices='../data/crypto_portfolio_test.csv'):
+        self.train_prices = self.get_data(train_prices)
+        self.test_prices = self.get_data(test_prices)
 
-    def __init__(self, train_prices = '../data/crypto_portfolio_train.csv', test_prices='../data/crypto_portfolio_test.csv', capital = 1e6):
-        self.capital = capital
-        self.train_data = self.load_data(train_prices)
-        self.test_data = self.load_data(test_prices)
-
-    def load_data(self, dataset):
-        data =  pd.read_csv(dataset)
-        try:
-            data.index = data['Date']
-            data = data.drop(columns = ['Date'])
-        except:
-            data.index = data['date']
-            data = data.drop(columns = ['date'])
+    def get_data(self, prices_dir):
+        data = pd.read_csv(prices_dir)
+        data.index = data['Date'] #the index has to be date for pandas operations like pct_change & cov
+        data = data.drop(columns = ['Date'])
         return data
 
-    def preprocess_state(self, state):
-        return state
+    '''
+        Given a state, get the data converted to pct_change & find cov
+    '''
+    def preprocess_state_data(self, state, cov=False):
+        x = state.pct_change().dropna()
+        if cov:
+            x = x.cov()
+        return x
 
-    def get_state(self, t, lookback, is_cov_matrix = True, is_raw_time_series = False, is_eval=False):
-
-        assert lookback <= t
-        if not is_eval:
-            decision_making_state = self.train_data.iloc[t-lookback:t]
+    '''
+        Get the data in window t-lookback to t - we operate on window of data as
+        states rather than a single data point
+    '''
+    def get_state(self, t, lookback, is_eval=False):
+        assert lookback <= t   #throw error if forming the window isnt possible
+        if is_eval:
+            curr_state = self.test_data.iloc[t-lookback:t]
         else:
-            decision_making_state = self.test_data.iloc[t-lookback:t]
-        decision_making_state = decision_making_state.pct_change().dropna()
+            curr_state = self.train_data.iloc[t-lookback:t]
+        curr_state = preprocess_state_data(curr_state, True)
+        return curr_state
 
-        if is_cov_matrix:
-            x = decision_making_state.cov()
-            return x
-        else:
-            if is_raw_time_series:
-                if not is_eval:
-                    decision_making_state = self.train_data.iloc[t-lookback:t]
-                else:
-                    decision_making_state = self.test_data.iloc[t-lookback:t]
-            return self.preprocess_state(decision_making_state)
-
-    def get_reward(self, action, action_t, reward_t, alpha = 0.01, is_eval=False):
-
-        def local_portfolio(returns, weights):
-            weights = np.array(weights)
-            rets = returns.mean() # * 252
-            covs = returns.cov() # * 252
-            P_ret = np.sum(rets * weights)
-            P_vol = np.sqrt(np.dot(weights.T, np.dot(covs, weights)))
-            P_sharpe = P_ret / P_vol
-            return np.array([P_ret, P_vol, P_sharpe])
-        if not is_eval:
-            data_period = self.train_data[action_t:reward_t]
-        else:
-            data_period = self.test_data[action_t:reward_t]
+    def get_reward(self, state, action, is_eval=False):
         weights = action
-        returns = data_period.pct_change().dropna()
-        rew = (data_period.values[-1] - data_period.values[0]) / data_period.values[0]
-
-        return np.dot(returns, weights), rew
+        returns = preprocess_state_data(state)
+        reward = (state.values[-1] - state.values[0])/state.values[0] #reward is the increase/decrease in returns within the window_size after taking a set of actions
+        return np.dot(returns, weights), reward

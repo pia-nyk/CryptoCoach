@@ -6,15 +6,9 @@ import random
 
 class Agent:
 
-    def __init__(
-                     self,
-                     portfolio_size,
-                     is_eval = False,
-                     allow_short = True,
-                 ):
+    def __init__(self, portfolio_size, is_eval = False):
 
         self.portfolio_size = portfolio_size
-        self.allow_short = allow_short
         self.input_shape = (portfolio_size, portfolio_size, )
         self.action_size = 3 # sit, buy, sell
 
@@ -25,13 +19,13 @@ class Agent:
         self.gamma = 0.95
         self.epsilon = 1.0
         self.epsilon_min = 0.01
-        self.epsilon_decay = 0.99
+        self.epsilon_decay = 0.05 #decay rate after every iteration
 
         self.train_model = self._model()
         self.test_model = self._get_model()
 
     def _model(self):
-
+        #check this
         inputs = Input(shape=self.input_shape)
         x = Flatten()(inputs)
         x = Dense(100, activation='relu')(x)
@@ -58,7 +52,7 @@ class Agent:
             return loaded_model
 
 
-    def nn_pred_to_weights(self, pred, allow_short = False):
+    def nn_pred_to_weights(self, pred):
 
         weights = np.zeros(len(pred))
         raw_weights = np.argmax(pred, axis=-1)
@@ -68,16 +62,13 @@ class Agent:
             if r == 0: # sit
                 weights[e] = 0
             elif r == 1: # buy
-                weights[e] = np.abs(pred[e][0][r])
+                weights[e] = np.abs(pred[e][0][r]) #check this
             else:
                 weights[e] = -np.abs(pred[e][0][r])
 
-        if not allow_short:
             weights += np.abs(np.min(weights))
             saved_min = np.abs(np.min(weights))
             saved_sum = np.sum(weights)
-        else:
-            saved_sum = np.sum(np.abs(weights))
 
         weights /= saved_sum
         return weights, saved_min, saved_sum
