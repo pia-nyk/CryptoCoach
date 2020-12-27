@@ -8,41 +8,49 @@ agent = Agent(N_ASSETS)
 env = CryptoEnvironment()
 
 window_size = 180
-episode_count = 300
+N = 300
 batch_size = 32
 rebalance_period = 90
+copy_step = 25
+portfolio_size = N_ASSETS
+action_size = 3
+input_shape = (portfolio_size, action_size)
+hidden_units = [100, 50]
+
+TargetNet = DQN(input_shape, hidden_units, action_size, portfolio_size)
 
 def train():
-    for e in range(episode_count):
-
+    for e in range(N):
         agent.is_eval = False
-        data_length = len(env.train_data)
+        data_length = len(env.train_data) #total data available for training
 
         returns_history = []
-        returns_history_equal = []
-
         rewards_history = []
+
+        #for equal weight allocation case - base case
+        returns_history_equal = []
         equal_rewards = []
 
         actions_to_show = []
 
         print("Episode " + str(e) + "/" + str(episode_count), 'epsilon', agent.epsilon)
 
-        s = env.get_state(np.random.randint(window_size+1, data_length-window_size-1), window_size)
+        s = env.get_state(np.random.randint(window_size+1, data_length-window_size-1), window_size) #any state of len window_size
         total_profit = 0
+        iter = 0
 
         for t in range(window_size, data_length, rebalance_period):
 
-            date1 = t-rebalance_period
+            start_period = t-rebalance_period
 
             s_ = env.get_state(t, window_size)
-            action = agent.act(s_)
+            action = agent.policy(s_)
 
             actions_to_show.append(action[0])
 
-            weighted_returns, reward = env.get_reward(action[0], date1, t)
+            weighted_returns, reward = env.get_reward(action[0], start_period, t)
             weighted_returns_equal, reward_equal = env.get_reward(
-                np.ones(agent.portfolio_size) / agent.portfolio_size, date1, t)
+                np.ones(agent.portfolio_size) / agent.portfolio_size, start_period, t)
 
             rewards_history.append(reward)
             equal_rewards.append(reward_equal)
@@ -53,10 +61,12 @@ def train():
             agent.memory4replay.append((s, s_, action, reward, done))
 
             if len(agent.memory4replay) >= batch_size:
-                agent.expReplay(batch_size)
-                agent.memory4replay = []
-
+                agent.train(TargetNet)
             s = s_
+            iter+=1
+
+            if iter % copy_steps == 0: #copying the weights to TargetNet at specified intervals
+                TargetNet.copy_weights(agent.train_model)
 
         rl_result = np.array(returns_history).cumsum()
         equal_result = np.array(returns_history_equal).cumsum()
