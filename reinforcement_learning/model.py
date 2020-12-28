@@ -1,11 +1,11 @@
-import tensorflow as tf
 from keras.layers import Input, Dense, Flatten, Dropout
 from keras.models import Model
+import numpy as np
 
-class DQNModel(tf.keras.Model):
+class DQNModel():
 
     def __init__(self, input_shape, hidden_units, num_actions, portfolio_size):
-        inputs = Input(shape=self.input_shape)
+        inputs = Input(shape=input_shape)
         z = Flatten()(inputs)
         for i in hidden_units:
             z = Dense(
@@ -18,7 +18,7 @@ class DQNModel(tf.keras.Model):
         predictions = []
         for i in range(portfolio_size):
             asset_dense = Dense(
-                units = self.num_actions, #for each portfolio asset, 3 actions are possible, predictions wrt all 3 must be provided by model
+                units = num_actions, #for each portfolio asset, 3 actions are possible, predictions wrt all 3 must be provided by model
                 activation='linear',
                 kernel_initializer='RandomNormal',
                 bias_initializer='zeros'
@@ -27,6 +27,8 @@ class DQNModel(tf.keras.Model):
 
         self.model = Model(inputs=inputs, outputs=predictions)
         self.model.compile(optimizer='adam', loss='mse')
+
+    def get_model(self):
         return self.model
 
     def copy_weights(self, TargetNet):
@@ -35,6 +37,9 @@ class DQNModel(tf.keras.Model):
         """
         local_net_weights = self.model.get_weights()
         target_net_weights = TargetNet.get_weights()
+        # print("Local Net Weights: " + str(local_net_weights))
+        # print("Target Net Weights: " + str(target))
         #manually set the trainable variables of TrainNet to TargetNet
         for v1, v2 in zip(local_net_weights, target_net_weights):
-            v1.assign(v2.numpy())
+            # v1.assign(v2.numpy())
+            v1 = np.array(v2)

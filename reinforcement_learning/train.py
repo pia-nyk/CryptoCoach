@@ -4,25 +4,28 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 N_ASSETS = 15
-agent = Agent(N_ASSETS)
+batch_size = 10
+max_experiences = 100
+min_experiences = 1
+agent = Agent(N_ASSETS, batch_size, max_experiences, min_experiences)
 env = CryptoEnvironment()
 
 window_size = 180
 N = 300
-batch_size = 32
-rebalance_period = 90
+# rebalance_period = 90 ignoring rebalancing for now
 copy_step = 25
 portfolio_size = N_ASSETS
 action_size = 3
 input_shape = (portfolio_size, action_size)
 hidden_units = [100, 50]
+copy_steps = 10
 
-TargetNet = DQN(input_shape, hidden_units, action_size, portfolio_size)
+TargetNet = DQNModel(input_shape, hidden_units, action_size, portfolio_size)
 
 def train():
     for e in range(N):
         agent.is_eval = False
-        data_length = len(env.train_data) #total data available for training
+        data_length = len(env.train_prices) #total data available for training
 
         returns_history = []
         rewards_history = []
@@ -31,37 +34,38 @@ def train():
         returns_history_equal = []
         equal_rewards = []
 
-        actions_to_show = []
+        actionBuffer = []
 
-        print("Episode " + str(e) + "/" + str(episode_count), 'epsilon', agent.epsilon)
+        print("Episode " + str(e) + "/" + str(N), 'epsilon', agent.epsilon)
 
-        s = env.get_state(np.random.randint(window_size+1, data_length-window_size-1), window_size) #any state of len window_size
+        random_start = np.random.randint(window_size+1, data_length-window_size-1)
+        s = env.get_state(random_start, random_start+window_size) #any state of len window_size
         total_profit = 0
         iter = 0
 
-        for t in range(window_size, data_length, rebalance_period):
+        for comp_period in range(window_size, data_length):
+        #, rebalance_period):
 
-            start_period = t-rebalance_period
+            start_period = comp_period-window_size #-rebalance_period
 
-            s_ = env.get_state(t, window_size)
+            s_ = env.get_state(start_period, comp_period) #for first iteration - start till window_size
             action = agent.policy(s_)
+            actionBuffer.append(action)
 
-            actions_to_show.append(action[0])
-
-            weighted_returns, reward = env.get_reward(action[0], start_period, t)
+            weighted_returns, reward = env.get_reward(action, start_period, comp_period)
             weighted_returns_equal, reward_equal = env.get_reward(
-                np.ones(agent.portfolio_size) / agent.portfolio_size, start_period, t)
+                np.ones(agent.portfolio_size) / agent.portfolio_size, start_period, comp_period)
 
             rewards_history.append(reward)
             equal_rewards.append(reward_equal)
             returns_history.extend(weighted_returns)
             returns_history_equal.extend(weighted_returns_equal)
 
-            done = True if t == data_length else False
-            agent.memory4replay.append((s, s_, action, reward, done))
+            done = True if comp_period == data_length else False
+            agent.add_experience({"s": s, "s2": s_, "a": action, "r": reward, "done": done}) #adding this iteration vars to experience buffer
 
-            if len(agent.memory4replay) >= batch_size:
-                agent.train(TargetNet)
+            if len(agent.expReplayBuffer) >= batch_size: #start training only if there are enough examples in replay buffer
+                agent.train(TargetNet.get_model())
             s = s_
             iter+=1
 
@@ -83,7 +87,7 @@ def train():
     plt.show()
 
     plt.figure(figsize = (12, 2))
-    for a in actions_to_show:
+    for a in actionBuffer:
         plt.bar(np.arange(N_ASSETS), a, color = 'red', alpha = 0.25)
         plt.xticks(np.arange(N_ASSETS), env.train_data.columns, rotation='vertical')
     plt.show()

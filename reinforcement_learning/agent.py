@@ -1,6 +1,7 @@
 import numpy as np
-from model import DQN
+from model import DQNModel
 import random
+from keras.models import model_from_json
 
 
 class Agent:
@@ -25,8 +26,8 @@ class Agent:
 
         #models
         self.hidden_units = [100, 50]
-        self.train_model = DQN(self.input_shape, self.hidden_units, self.action_size, self.portfolio_size)
-        self.test_model = get_model()
+        self.train_model = DQNModel(self.input_shape, self.hidden_units, self.action_size, self.portfolio_size).get_model()
+        self.test_model = self.get_model()
 
     def get_model(self):
         """
@@ -43,7 +44,17 @@ class Agent:
         """
             Helper function - Convert the model predictions to the form of weights associated with the portfolio stocks
         """
-        pass
+        weights = np.zeros(len(pred))
+        raw_weights = np.argmax(pred, axis=-1)
+
+        for stock, action in enumerate(raw_weights): #should be pred
+            if action == 0:
+                weights[stock] = 0
+            elif action == 1:
+                weights[stock] = np.abs(pred[stock][0][action]) #bcoz pred is array of arrays
+            else:
+                weights[stock] = -np.abs(pred[stock][0][action]) #bcoz pred is array of arrays
+        return weights
 
     def policy(self, state):
         if self.is_eval: #testing the model, get the model predictions directly irrespective of epsilon
@@ -53,7 +64,7 @@ class Agent:
                 weights = np.random.normal(0, 1, size = (self.portfolio_size, ))
                 saved_sum = np.sum(weights)
                 weights = weights/saved_sum #sum of all weights should be 1
-                return weights, saved_sum
+                return weights
             else:
                 pred = self.train_model.predict(np.expand_dims(state.values, 0))
         return self.predictions_to_weights(pred)
@@ -79,6 +90,7 @@ class Agent:
         #decrease the exploration rate after every iteration
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+        print("Epsilon: " + str(self.epsilon))
 
     def add_experience(self, experience):
         """
@@ -89,13 +101,3 @@ class Agent:
                 self.expReplayBuffer[key].pop(0) #remove an old experience to make place for a new one FIFO
         for key, value in experience.items():
             self.expReplayBuffer[key].append(value) #add the new experience
-
-    def copy_weights(self, TargetNet):
-        """
-            after a specified number of training steps, copy the trained value in local net to target net for future ref
-        """
-        local_net_weights = self.train_model.get_weights()
-        target_net_weights = TargetNet.get_weights()
-        #manually set the trainable variables of TrainNet to TargetNet
-        for v1, v2 in zip(local_net_weights, target_net_weights):
-            v1.assign(v2.numpy())
