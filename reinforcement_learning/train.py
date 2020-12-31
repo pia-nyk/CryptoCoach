@@ -69,7 +69,7 @@ def train():
             if num_expReplay >= batch_size: #start training only if there are enough examples in replay buffer
                 agent.train(TargetNet.get_model())
             s = s_
-            if iter % 10 == 0:
+            if iter % 30 == 0:
                 print(iter)
             iter+=1
 
@@ -80,14 +80,15 @@ def train():
             agent.epsilon *= agent.epsilon_decay
         print("Epsilon: " + str(agent.epsilon))
 
+        model_json = agent.train_model.to_json()
+        with open("models/model.json", "w") as json_file:
+            json_file.write(model_json)
+        agent.train_model.save_weights("models/model" + str(e) + ".h5")
+
         rl_result = np.array(returns_history).cumsum()
         equal_result = np.array(returns_history_equal).cumsum()
 
     print("Done")
-    model_json = agent.train_model.to_json()
-    with open("models/model.json", "w") as json_file:
-        json_file.write(model_json)
-    agent.train_model.save_weights("models/model.h5")
 
     plt.figure(figsize = (12, 2))
     plt.plot(rl_result, color = 'black', ls = '-')
