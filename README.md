@@ -1,4 +1,4 @@
-# Deep-Q-Learning-based-portfolio-optimizer
+# Deep Q-Learning based Portfolio Optimizer
 
 Portfolio optimation on cryptocurrency prices using DQN Agent. 
 
