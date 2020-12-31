@@ -3,7 +3,7 @@
 Portfolio optimization on cryptocurrency prices using DQN Agent. 
 
 <b> Why not use Markowitz frontier directly? </b> <br/>
-Markowitz efficient frontier doesn't work in this case as the price returns don't follow Normal distribution, which is a crucial assumption in the Modern portfolio theory.
+Markowitz efficient frontier doesn't work in this case as the price returns don't follow Normal distribution, which is a crucial assumption in the Modern portfolio theory. This is practically verified. [Pls refer this jupyter notebook](Portfolio_optimization_efficient_frontier.ipynb)
 
 <b> What does the agent do? </b> <br/>
 The DQN agent is trained to predict the prices & hence the returns obtained on 3 actions - (selling, buying and holding) the crypto portfolio consisting of 15 stocks by assigning them appropriate weights dynamically.
