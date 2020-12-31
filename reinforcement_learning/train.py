@@ -16,13 +16,14 @@ N = 300
 copy_step = 25
 portfolio_size = N_ASSETS
 action_size = 3
-input_shape = (portfolio_size, action_size)
+input_shape = (portfolio_size, portfolio_size, )
 hidden_units = [100, 50]
 copy_steps = 10
-
+num_expReplay = 0
 TargetNet = DQNModel(input_shape, hidden_units, action_size, portfolio_size)
 
 def train():
+    global num_expReplay
     for e in range(N):
         agent.is_eval = False
         data_length = len(env.train_prices) #total data available for training
@@ -63,14 +64,21 @@ def train():
 
             done = True if comp_period == data_length else False
             agent.add_experience({"s": s, "s2": s_, "a": action, "r": reward, "done": done}) #adding this iteration vars to experience buffer
+            num_expReplay+=1
 
-            if len(agent.expReplayBuffer) >= batch_size: #start training only if there are enough examples in replay buffer
+            if num_expReplay >= batch_size: #start training only if there are enough examples in replay buffer
                 agent.train(TargetNet.get_model())
             s = s_
+            if iter % 10 == 0:
+                print(iter)
             iter+=1
 
             if iter % copy_steps == 0: #copying the weights to TargetNet at specified intervals
                 TargetNet.copy_weights(agent.train_model)
+
+        if agent.epsilon > agent.epsilon_min:
+            agent.epsilon *= agent.epsilon_decay
+        print("Epsilon: " + str(agent.epsilon))
 
         rl_result = np.array(returns_history).cumsum()
         equal_result = np.array(returns_history_equal).cumsum()

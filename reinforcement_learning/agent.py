@@ -8,11 +8,12 @@ class Agent:
     def __init__(self, portfolio_size, batch_size, max_experiences, min_experiences, is_eval = False):
         self.portfolio_size = portfolio_size
         self.action_size = 3 # sit, buy, sell
-        self.input_shape = (self.portfolio_size, self.action_size, )
+        self.input_shape = (self.portfolio_size, self.portfolio_size, )
         self.is_eval = is_eval
 
         #replay buffer hyperparameters
         self.expReplayBuffer = {'s':[], 'a':[], 'r':[], 's2':[],'done':[]}
+        self.expReplayBufferSize = 0
         self.batch_size = batch_size #for replay buffer
         self.max_experiences = max_experiences
         self.min_experiences = min_experiences
@@ -69,34 +70,54 @@ class Agent:
                 pred = self.train_model.predict(np.expand_dims(state.values, 0))
         return self.predictions_to_weights(pred)
 
+    def weights_to_predictions(self, action_weights, rewards, Q_star):
+        Q = np.zeros((self.portfolio_size, self.action_size))
+        for i in range(self.portfolio_size):
+            if action_weights[i] == 0:
+                Q[i][0] = rewards[i] + self.gamma * np.max(Q_star[i][0])
+            elif action_weights[i] > 0:
+                Q[i][1] = rewards[i] + self.gamma * np.max(Q_star[i][1])
+            else:
+                 Q[i][2] = rewards[i] + self.gamma * np.max(Q_star[i][2])
+        return Q
+
     def train(self, TargetNet):
+        # print("Training in progress")
         ids = np.random.randint(low=0, high=len(self.expReplayBuffer['s']), size=self.batch_size) #get batchsize exp data for training
         #store the experience data in vars for easy access
-        states = np.asarray([self.experience['s'][i] for i in ids])
-        actions = np.asarray([self.experience['a'][i] for i in ids])
-        rewards = np.asarray([self.experience['r'][i] for i in ids])
-        states_next = np.asarray([self.experience['s2'][i] for i in ids])
-        dones = np.asarray([self.experience['done'][i] for i in ids])
+        # states = np.asarray([self.expReplayBuffer['s'][i] for i in ids])
+        # actions = np.asarray([self.expReplayBuffer['a'][i] for i in ids])
+        # rewards = np.asarray([self.expReplayBuffer['r'][i] for i in ids])
+        # states_next = np.asarray([self.expReplayBuffer['s2'][i] for i in ids])
+        # dones = np.asarray([self.expReplayBuffer['done'][i] for i in ids])
 
-        #predict the q values for the states_next using TargetNet as the variables of that net would be more stable
-        values_next = np.max(TargetNet.predict(states_next), axis=1)
-        actual_values = np.where(dones, rewards, rewards+self.gamma*value_next)
-        Q_val = TargetNet.predict(states)
-        #Q learing formula
-        Q_val = (1-self.alpha)*Q_val + self.alpha*actual_values
+        for i in range(len(self.expReplayBuffer['s'])):
+            state = self.expReplayBuffer['s'][i]
+            action = self.expReplayBuffer['a'][i]
+            reward = self.expReplayBuffer['r'][i]
+            state_next = self.expReplayBuffer['s2'][i]
+            done = self.expReplayBuffer['done'][i]
+            #predict the q values for the states_next using TargetNet as the variables of that net would be more stable
+            # print("Shape: " + str(state_next.shape))
+            values_next = np.max(TargetNet.predict(np.expand_dims(state_next, axis=0)), axis=1)
+            # print("Action vals")
+            # print(action)
+            # actual_values = np.where(dones, rewards, rewards+self.gamma*values_next)
+            Q_learned_values = self.weights_to_predictions(action, reward, values_next)
+            Q_val = TargetNet.predict(np.expand_dims(state, axis=0))
+            #Q learing formula
+            Q_val = [np.add(a * (1-self.alpha), q * self.alpha) for a, q in zip(Q_val, Q_learned_values)]
 
-        #train the main model
-        self.train_model.fit(np.expand_dims(s, 0), Q, epochs=1, verbose=0)
-        #decrease the exploration rate after every iteration
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
-        print("Epsilon: " + str(self.epsilon))
+            #train the main model
+            self.train_model.fit(np.expand_dims(state, 0), Q_val, epochs=1, verbose=0)
+            #decrease the exploration rate after every iteration
 
     def add_experience(self, experience):
         """
             add experience to the expReplayBuffer
         """
-        if len(self.expReplayBuffer['s']) >= self.max_experiences:
+        # print("Length: " + str(self.expReplayBufferSize))
+        if self.expReplayBufferSize >= self.max_experiences:
             for key in self.expReplayBuffer.keys():
                 self.expReplayBuffer[key].pop(0) #remove an old experience to make place for a new one FIFO
         for key, value in experience.items():
