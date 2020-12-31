@@ -1,6 +1,6 @@
 # Deep Q-Learning based Portfolio Optimizer
 
-Portfolio optimation on cryptocurrency prices using DQN Agent. 
+Portfolio optimization on cryptocurrency prices using DQN Agent. 
 
 <b> Why not use Markowitz frontier directly? </b> <br/>
 Markowitz efficient frontier doesn't work in this case as the price returns don't follow Normal distribution, which is a crucial assumption in the Modern portfolio theory.
